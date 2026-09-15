@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>DevPortal: search</title>
+<style>
+body{font:16px/1.6 -apple-system,system-ui,sans-serif;max-width:52rem;margin:4rem auto;padding:0 1.5rem;background:#ffffff;color:#1a1a1a}
+code,pre{font-family:ui-monospace,Menlo,monospace}
+code{background:#f0f0f3;padding:.15em .4em;border-radius:4px}
+pre{background:#f6f8fa;color:#1a1a1a;border:1px solid #d0d7de;border-radius:6px;padding:1rem;overflow-x:auto}
+a{color:#0a58ca}
+.ok{background:#e7f7ed;border:1px solid #1a7f37;border-radius:8px;padding:1rem 1.25rem;margin:2rem 0}
+.warn{background:#fff4e5;border:1px solid #bf5b04;border-radius:8px;padding:1rem 1.25rem}
+.add{color:#1a7f37}.del{color:#cf222e}
+</style>
+<p><a href="/">DevPortal</a></p>
+<h1>search: "ListenAndServe"</h1>
+<div class="warn">
+  <strong>Expensive page.</strong> In the real system every search query runs across the
+  whole code base, and scrapers try every possible query. The bot policy adds
+  <strong>+20 weight</strong> here, so a client that looks like a browser pays difficulty 5.
+</div>
+<pre>src/server.go:3     log.Fatal(srv.ListenAndServe())
+cmd/api/main.go:12  http.ListenAndServe(":8080", mux)</pre>

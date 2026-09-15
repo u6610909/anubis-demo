@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>DevPortal</title>
+<style>
+body{font:16px/1.6 -apple-system,system-ui,sans-serif;max-width:52rem;margin:4rem auto;padding:0 1.5rem;background:#ffffff;color:#1a1a1a}
+code,pre{font-family:ui-monospace,Menlo,monospace}
+code{background:#f0f0f3;padding:.15em .4em;border-radius:4px}
+pre{background:#f6f8fa;color:#1a1a1a;border:1px solid #d0d7de;border-radius:6px;padding:1rem;overflow-x:auto}
+a{color:#0a58ca}
+.ok{background:#e7f7ed;border:1px solid #1a7f37;border-radius:8px;padding:1rem 1.25rem;margin:2rem 0}
+.warn{background:#fff4e5;border:1px solid #bf5b04;border-radius:8px;padding:1rem 1.25rem}
+.add{color:#1a7f37}.del{color:#cf222e}
+</style>
+<h1>DevPortal</h1>
+<p>Internal code browser, API docs and issue tracker.</p>
+<div class="ok">
+  <strong>You reached the origin.</strong>
+  You are past Anubis. Either you solved a proof-of-work challenge,
+  or a policy rule allowed you through.
+</div>
+<h2>Expensive generated pages</h2>
+<p>These hit git and the database on every request, so the bot policy gives them extra weight:</p>
+<ul>
+  <li><a href="/blame/">/blame/</a>: line-by-line authorship</li>
+  <li><a href="/commit/">/commit/</a>: full diffs</li>
+  <li><a href="/search/">/search/</a>: code search</li>
+</ul>
+<h2>Machine endpoints</h2>
+<p>Allowed without a challenge, because CI runners cannot run JavaScript: <code>GET /api/status.json</code></p>

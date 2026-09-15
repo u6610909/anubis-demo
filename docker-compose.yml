@@ -1,0 +1,41 @@
+# CSX4110 Project 02 — Anubis demo stack
+#
+#   client ──▶ Anubis (:8080) ──▶ Nginx ("DevPortal" origin)
+#
+# Anubis is the only thing exposed. Nginx has NO published port, which is the
+# whole point: the origin cannot be reached except through the firewall.
+
+services:
+  anubis:
+    image: ghcr.io/techarohq/anubis:v1.27.0
+    container_name: demo-anubis
+    environment:
+      BIND: ":8080"                          # where Anubis listens
+      # Anubis normally sits behind Nginx/Caddy, which terminates TLS and sets
+      # X-Real-Ip. In this demo we expose Anubis directly, so we tell it to
+      # trust the socket's own remote address instead. Without this it returns
+      # HTTP 500 "administrator has misconfigured Anubis".
+      USE_REMOTE_ADDRESS: "true"
+      TARGET: "http://devportal:80"          # the origin it protects
+      POLICY_FNAME: "/data/cfg/botPolicies.yaml"
+      METRICS_BIND: ":9090"                  # Prometheus metrics
+      SERVE_ROBOTS_TXT: "true"               # publish a robots.txt for polite bots
+      # Demo only. In production generate with:
+      #   openssl rand -hex 32
+      # and inject it as a secret. This key signs the "you passed" JWT cookie.
+      ED25519_PRIVATE_KEY_HEX: "f7e3b1a90c2d4e6f8a0b1c2d3e4f50617283949a5b6c7d8e9f0a1b2c3d4e5f60"
+    volumes:
+      - ./botPolicies.yaml:/data/cfg/botPolicies.yaml:ro
+    ports:
+      - "8888:8080"   # the public front door (host 8888 -> Anubis 8080)
+      - "9091:9090"   # metrics, for the dashboard slide
+    depends_on:
+      - devportal
+
+  # The thing we are protecting: a stand-in for our Gitea + docs portal.
+  devportal:
+    image: nginx:alpine
+    container_name: demo-devportal
+    volumes:
+      - ./www:/usr/share/nginx/html:ro
+    # Deliberately no `ports:` — unreachable from the host except via Anubis.

@@ -1,0 +1,134 @@
+# ============================================================================
+#  DevPortal bot policy  —  CSX4110 Project 02
+# ============================================================================
+#  Anubis reads this top-to-bottom and assigns each request a WEIGHT
+#  ("how suspicious is this?"). The `thresholds:` block at the bottom then
+#  decides what that weight earns you: nothing, a cheap challenge, or an
+#  expensive one.
+#
+#  Actions:  ALLOW  = straight through, no challenge
+#            DENY   = refused outright
+#            WEIGH  = adjust the suspicion score, keep evaluating
+# ============================================================================
+
+bots:
+  # --- Imported rule packs (shipped inside the Anubis image) ----------------
+
+  # Malformed / abusive requests that no real client sends.
+  - import: (data)/bots/_deny-pathological.yaml
+
+  # Known AI training crawlers: GPTBot, ClaudeBot, Bytespider, etc. -> DENY.
+  # Swap for ai-block-moderate.yaml if you want to permit AI *search* bots
+  # (the ones that send users back to you) while blocking AI *training* bots.
+  - import: (data)/meta/ai-block-aggressive.yaml
+
+  # Search engines we WANT indexing us: Google, Bing, DuckDuckGo,
+  # Internet Archive, Kagi, Marginalia... -> ALLOW.
+  # These are verified by reverse DNS, not just the User-Agent string,
+  # so a scraper cannot get in by claiming to be Googlebot.
+  - import: (data)/crawlers/_allow-good.yaml
+
+  # /robots.txt, /favicon.ico, /.well-known/* must never be challenged
+  # or you break ACME certificate renewal and every feed reader.
+  - import: (data)/common/keep-internet-working.yaml
+
+  # --- Our own rules -------------------------------------------------------
+
+  # 1. Our REST API is consumed by CI runners and the mobile app. They have no
+  #    JavaScript engine and CANNOT solve a proof-of-work challenge, so they
+  #    must be allowlisted explicitly or we break our own clients.
+  - name: allow-devportal-api
+    action: ALLOW
+    expression:
+      all:
+        - 'path.startsWith("/api/")'
+        - '"Accept" in headers'
+        - 'headers["Accept"] == "application/json"'
+
+  # 2. Let `git clone` through untouched.
+  - name: allow-git-clients
+    action: ALLOW
+    expression: userAgent.startsWith("git/")
+
+  # 3. THE PAIN POINT. These are the uncached, database-and-git-heavy pages
+  #    the scrapers were grinding through. Add weight so that anything
+  #    browser-shaped pays a much higher price to walk them in bulk, while a
+  #    human clicking one diff barely notices.
+  - name: expensive-generated-pages
+    action: WEIGH
+    expression:
+      any:
+        - 'path.startsWith("/blame/")'
+        - 'path.startsWith("/commit/")'
+        - 'path.startsWith("/search")'
+    weight:
+      adjust: 20
+
+  # 4. Catch-all: anything claiming to be a browser starts mildly suspicious.
+  #    This is what catches the scrapers that spoof a Chrome User-Agent,
+  #    which is the entire problem we set out to solve.
+  - name: generic-browser
+    action: WEIGH
+    user_agent_regex: >-
+      Mozilla|Opera
+    weight:
+      adjust: 10
+
+# ============================================================================
+#  Thresholds: weight -> consequence
+# ============================================================================
+thresholds:
+  # Verified good crawlers and our own API land here. Free pass.
+  - name: minimal-suspicion
+    expression: weight <= 0
+    action: ALLOW
+
+  # Browser reading normal pages: 10 points.
+  # "fast" = multithreaded SHA-256 proof of work.
+  # difficulty N = the hash must start with N leading zeroes IN HEX, so the
+  # expected work is 16^N hashes. Each +1 is 16x harder, not 2x.
+  #   difficulty 2 =        256 hashes  -> instant
+  # A human never notices this.
+  - name: normal-browsing
+    expression:
+      all:
+        - weight > 0
+        - weight < 30
+    action: CHALLENGE
+    challenge:
+      algorithm: fast
+      difficulty: 2
+
+  # Browser (10) hitting an expensive generated page (20) = 30 points.
+  #   difficulty 5 =  1,048,576 hashes -> 4-8s on a laptop (measured: 4.5s)
+  # Paid ONCE per session, then the cookie covers the rest of the visit, so a
+  # human reading one diff waits 8 seconds. A crawler that rotates identity to
+  # avoid the cookie pays it on every single page.
+  #
+  # We deliberately do NOT use difficulty 6 here. It is 16x more work again
+  # (~16.7M hashes; we measured over 2 minutes on the same laptop) which we
+  # judged unacceptable for real users. Tuning this number is the single most
+  # important operational decision when deploying Anubis.
+  - name: expensive-page-scraping
+    expression: weight >= 30
+    action: CHALLENGE
+    challenge:
+      algorithm: fast
+      difficulty: 5
+
+# Keep challenge state in RAM. Production would use Valkey/Redis so the
+# challenge survives a restart and is shared across replicas.
+store:
+  backend: memory
+  parameters: {}
+
+# Deliberately return HTTP 200 with the challenge page rather than 403.
+# Counter-intuitive, but aggressive scrapers retry forever on a 4xx and
+# give up once they receive a 200. Anubis ships this as the default.
+status_codes:
+  CHALLENGE: 200
+  DENY: 200
+
+honeypot:
+  enabled: true
+  implementation: naive
