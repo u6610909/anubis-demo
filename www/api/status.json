@@ -1,5 +1,5 @@
 {
   "service": "devportal",
   "status": "ok",
-  "note": "Allowlisted in botPolicies.yaml - CI runners have no JS engine and cannot solve a proof-of-work challenge."
+  "note": "Let in by a rule in botPolicies.yaml. CI runners cannot run JavaScript, so they cannot solve the puzzle."
 }
