@@ -14,6 +14,13 @@ step(){ printf '\n%s\n%s\n' "${B}$1${N}" "${D}$2${N}"; }
 printf '\n%s\n' "${B}=== Anubis demo: DevPortal behind a Web AI Firewall ===${N}"
 printf '%s\n' "${D}target: $BASE${N}"
 
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 -A 'git/2.45.0' "$BASE/")
+if [ "$code" != "200" ]; then
+  printf '\n   %s  cannot reach the demo (HTTP %s).\n' "${R}STOP${N}" "$code"
+  printf '   %s\n\n' "${D}Is it running? Try: docker compose up -d${N}"
+  exit 1
+fi
+
 # ---------------------------------------------------------------------------
 step "1) An AI bot that says who it is (GPTBot)" \
      "curl -A 'GPTBot/1.2' $BASE/"
@@ -34,6 +41,8 @@ if grep -q 'not a bot' <<<"$body"; then
   printf '   %s  proof-of-work puzzle, difficulty %s\n' "${Y}CHALLENGED${N}" "${diff:-?}"
   printf '   %s\n' "${D}curl has no JavaScript engine, so this is where the scraper stops.${N}"
   printf '   real website content it received: %s\n' "$(grep -c 'reached the origin' <<<"$body")"
+else
+  printf '   unexpected: %s\n' "$(grep -oE '<title>[^<]*' <<<"$body")"
 fi
 pause "$1"
 
@@ -42,8 +51,12 @@ step "3) Same fake Chrome, but on an expensive page (/blame/)" \
      "Same name tag, different page. Watch the difficulty change."
 body=$(curl -s -A "$CHROME" "$BASE/blame/")
 diff2=$(grep -oE '"difficulty":[0-9]+' <<<"$body" | head -1 | cut -d: -f2)
-printf '   %s  difficulty %s  %s\n' "${Y}CHALLENGED${N}" "${diff2:-?}" \
-       "${D}(browser +10, expensive path +20 = weight 30)${N}"
+if grep -q 'not a bot' <<<"$body"; then
+  printf '   %s  difficulty %s  %s\n' "${Y}CHALLENGED${N}" "${diff2:-?}" \
+         "${D}(browser +10, expensive path +20 = weight 30)${N}"
+else
+  printf '   unexpected: %s\n' "$(grep -oE '<title>[^<]*' <<<"$body")"
+fi
 printf '   %s\n' "${D}difficulty counts zeros in hex, so each +1 means 16x more tries.${N}"
 printf '   %s\n' "${D}  difficulty ${diff:-2} = ~$((16**${diff:-2})) hashes   difficulty ${diff2:-5} = ~$((16**${diff2:-5})) hashes${N}"
 pause "$1"
@@ -51,14 +64,21 @@ pause "$1"
 # ---------------------------------------------------------------------------
 step "4) Our own CI runner. It cannot run JavaScript, so we must let it in" \
      "curl -H 'Accept: application/json' $BASE/api/status.json"
-curl -s -A 'devportal-ci/2.1' -H 'Accept: application/json' "$BASE/api/status.json" | head -4 | sed 's/^/   /'
-printf '   %s  let in by the allow-devportal-api rule\n' "${G}PASSED${N}"
+body=$(curl -s -A 'devportal-ci/2.1' -H 'Accept: application/json' "$BASE/api/status.json")
+if grep -q '"status": "ok"' <<<"$body"; then
+  head -4 <<<"$body" | sed 's/^/   /'
+  printf '   %s  let in by the allow-devportal-api rule\n' "${G}PASSED${N}"
+else
+  printf '   unexpected: %s\n' "$(head -c 80 <<<"$body")"
+fi
 pause "$1"
 
 # ---------------------------------------------------------------------------
 step "5) git clone" "curl -A 'git/2.45.0' $BASE/"
 if curl -s -A 'git/2.45.0' "$BASE/" | grep -q 'reached the origin'; then
   printf '   %s  git is let in without a puzzle\n' "${G}PASSED${N}"
+else
+  printf '   unexpected: git did not reach the website\n'
 fi
 pause "$1"
 
