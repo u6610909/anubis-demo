@@ -166,6 +166,7 @@ botPolicies.yaml     # the rules, and the file worth reading
 www/                 # the fake DevPortal site (home, /blame/, /commit/, /search/, /api/)
 demo/demo.sh         # scripted demo: runs five kinds of client against Anubis
 demo/watch-log.sh    # live, readable view of what Anubis decides (needs jq)
+demo/flood.sh        # sends many bots at once and counts what happened (./demo/flood.sh 1000 100)
 ```
 
 ## References
