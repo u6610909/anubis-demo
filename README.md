@@ -201,33 +201,6 @@ in hex, not in bits, so each +1 means 16 times more work.
 
 Picking this number is the main decision you have to make when you set up Anubis.
 
-## Problems we ran into
-
-- Every request gave HTTP 500 ("administrator has misconfigured Anubis") until we added
-  `USE_REMOTE_ADDRESS: "true"`. Anubis normally sits behind nginx or Caddy, which tell it
-  the visitor's IP in the `X-Real-Ip` header. We run it directly, so it has to read the IP
-  from the connection.
-- Anubis answers with HTTP 200, not 403, even when it blocks a bot or shows a puzzle. It
-  looks wrong, but aggressive scrapers keep retrying after a 4xx and stop after a 200.
-- Anything that cannot run JavaScript, like CI, mobile apps, `git` and feed readers, gets
-  stuck unless you add an ALLOW rule for it. That is the easiest way to break your own
-  service.
-- `ED25519_PRIVATE_KEY_HEX` signs the cookie, so it should be secret. Ours is written in
-  the compose file because this is a demo. For a real setup, make one with
-  `openssl rand -hex 32`.
-- The GeoIP and ASN rules in Anubis's default config need a paid
-  [Thoth](https://anubis.techaro.lol/docs/admin/thoth) subscription, so we left them out.
-
-## Limitations
-
-- It slows scrapers down but does not stop them. A well funded scraper can run headless
-  Chrome and pay the cost. The point is to make bulk scraping too expensive to be worth it.
-- It needs JavaScript, so text browsers and some accessibility tools cannot get through.
-- The puzzle uses the visitor's CPU and battery. This is a real cost, and it is the main
-  criticism people have about the project.
-- Picking the difficulty is a guess. Too low does nothing, too high makes users leave.
-  You can only find a good value by testing.
-
 ## Files
 
 ```
