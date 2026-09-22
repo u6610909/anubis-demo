@@ -69,7 +69,17 @@ bots:
     weight:
       adjust: 20
 
-  # 4. A name tag with "Mozilla" or "Opera" in it looks like a browser, so it
+  # 4. Fake Googlebot. The real Googlebot is already let in by the
+  #    _allow-good rule pack above, after Anubis checks it really comes from
+  #    Google. So any "Googlebot" that gets this far is lying about who it is.
+  #    Add 20 points so it gets the hard puzzle, even on the home page.
+  - name: fake-googlebot
+    action: WEIGH
+    user_agent_regex: Googlebot
+    weight:
+      adjust: 20
+
+  # 5. A name tag with "Mozilla" or "Opera" in it looks like a browser, so it
   #    gets 10 points. Almost every browser's name tag starts with
   #    "Mozilla/5.0", and so do the scrapers that pretend to be Chrome, which
   #    is the problem we are solving. curl, wget and CCBot do not match, so
