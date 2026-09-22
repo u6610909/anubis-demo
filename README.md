@@ -1,60 +1,132 @@
-# Fighting AI scrapers with Anubis
+# Anubis demo (CSX4110 Project 02: Tech Update)
 
-**CSX4110 Project 02: Tech Update**
 Warachai A. 6610996 · Badin B. 6611108 · Ratchanon P. 6610909
 
-A runnable demo of [Anubis](https://github.com/TecharoHQ/anubis), an open-source
-Web AI Firewall, protecting a stand-in developer portal.
+This is our demo for the Tech Update project. We put [Anubis](https://github.com/TecharoHQ/anubis),
+an open-source Web AI Firewall, in front of a small fake website and show how it treats
+different bots.
 
----
+## How to run the demo
 
-## The problem
+You need:
 
-We run **DevPortal**: a Gitea code browser, an API docs wiki and an issue tracker.
-Traffic grew about 5 times, but almost none of it is human. AI crawlers that do not
-identify themselves read every *generated* page: every diff, every `blame`, every search
-query. Those are our most expensive pages, because each hit runs git and database
-queries with no cache.
+- Docker Desktop, and it has to be running
+- git
+- jq, but only for step 5 (on a Mac: `brew install jq`)
 
-They ignore `robots.txt`, use residential IP pools, and send normal browser User-Agent
-strings, so rate limiting, IP blocking and User-Agent filters all fail.
+On Windows, `docker compose` works in PowerShell, but the `.sh` scripts need Git Bash or WSL.
 
-## The idea
-
-Anubis is a reverse proxy that makes every visitor pay a small cost. Suspicious clients
-have to solve a SHA-256 proof-of-work puzzle in JavaScript before they reach our server.
-If they solve it, they get a signed cookie and browse normally.
-
-A human pays once, for a few seconds. A scraper pulling a million pages pays every time.
-Scraping still works, it just gets expensive.
-
----
-
-## Quick start
-
-You need Docker Desktop running.
+### Step 1: Download and start it
 
 ```bash
 git clone https://github.com/u6610909/anubis-demo.git
 cd anubis-demo
 docker compose up -d
+```
+
+The first time, Docker downloads the Anubis and nginx images, so it takes a minute or two.
+
+### Step 2: Run the terminal demo
+
+```bash
 ./demo/demo.sh
 ```
 
-The first run downloads the Anubis and nginx images.
+Press Enter to go to the next step. The script pretends to be five different visitors
+using `curl`. You should see GPTBot get DENIED, a fake Chrome get a puzzle (difficulty 2),
+the same fake Chrome get a harder puzzle on `/blame/` (difficulty 5), and our CI runner
+and git get PASSED.
 
-Then open <http://localhost:8888/blame/> in a private or incognito window and watch it solve the challenge. Use a new private window each time: once a browser passes, its cookie lasts 7 days and it will skip the challenge.
+Use `./demo/demo.sh --fast` if you do not want to press Enter each time.
+
+### Step 3: Try it in a real browser
+
+Open a private or incognito window and go to <http://localhost:8888/blame/>.
+You will see the Anubis page with a progress bar. After a few seconds you get the
+DevPortal page. Reload it and it opens straight away, because your browser now has
+the cookie.
+
+Use a new private window every time you want to see the puzzle again. The cookie lasts
+7 days, so a normal window will skip the puzzle.
+
+### Step 4 (optional): Dress up your browser as GPTBot
+
+In Chrome, open DevTools (`Cmd+Option+I`), press `Cmd+Shift+P` and type
+`>network conditions`. Under User agent, untick "Use browser default", choose Custom,
+and paste:
+
+```
+Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.2; +https://openai.com/gptbot
+```
+
+Reload the page with DevTools still open. You get the "Oh noes!" page, because Anubis
+now thinks you are GPTBot. Tick "Use browser default" again to go back to normal.
+
+### Step 5 (optional): Watch what Anubis decides
+
+Open a second terminal in the same folder and run:
+
+```bash
+./demo/watch-log.sh
+```
+
+Every time a bot is blocked or gets a puzzle, a line shows up, for example:
+
+```
+07:46:53  BLOCKED   GPTBot           /          rule: bot/ai-crawlers-training
+07:46:53  PUZZLE    Chrome           /blame/    weight 30, hard puzzle (difficulty 5)
+```
+
+Visitors that are just let in (git, our API, plain curl) do not show up here. Press
+`Ctrl+C` to stop it.
+
+### Step 6 (optional): Send a lot of bots at once
+
+```bash
+./demo/flood.sh 1000 100
+```
+
+This sends 1000 requests from 8 kinds of bots, 100 at a time, and prints a table of
+what happened to each. At the end it checks how many requests really reached the
+website. That number should be the same as the number Anubis let in.
+
+### Step 7: Stop it
 
 ```bash
 docker compose down
 ```
 
-> Host port **8888** maps to Anubis's internal 8080. Change it in `docker-compose.yml`
-> if that port is already in use. Nginx has no published port, so the origin cannot be
-> reached except through the firewall. If you publish one, visitors can skip Anubis
-> completely.
+### If something goes wrong
 
----
+| Problem | What to do |
+|---|---|
+| `Cannot connect to the Docker daemon` | Docker Desktop is not running. Open it and wait. |
+| `port is already allocated` | Something else uses port 8888. In `docker-compose.yml`, change `"8888:8080"` to something like `"8899:8080"` and use that port. |
+| The browser skips the puzzle | It already has the cookie. Close all private windows and open a new one. |
+| `demo.sh` says STOP, cannot reach the demo | The demo is not running. Run `docker compose up -d`. |
+
+## The problem we are solving
+
+Our story is that we run DevPortal: a Gitea code browser, an API docs wiki and an issue
+tracker. Traffic grew about 5 times, but almost none of it is human. AI crawlers that
+do not say who they are keep reading every generated page: every diff, every `blame`,
+every search query. These are our most expensive pages, because each one runs git and
+database queries with no cache.
+
+The crawlers ignore `robots.txt`, use residential IP pools, and send normal browser
+User-Agent strings. So rate limiting, IP blocking and User-Agent filters did not work.
+
+## How Anubis helps
+
+Anubis sits in front of the website as a reverse proxy. Visitors that look suspicious
+have to solve a SHA-256 proof-of-work puzzle in JavaScript before they can see the
+website. If they solve it, they get a signed cookie and can browse normally.
+
+A person only pays once, for a few seconds. A scraper that wants a million pages has to
+pay every time. Scraping still works, it just gets expensive.
+
+In our setup, nginx has no port of its own, so you cannot reach the website without
+going through Anubis. If you publish a port for nginx, visitors can skip Anubis.
 
 ## Diagrams
 
@@ -81,7 +153,7 @@ flowchart LR
 
 ### How a request is scored
 
-Anubis gives each request a **weight**, then a threshold decides what happens to it.
+Anubis gives each request a weight (points). Then the total decides what happens.
 
 ```mermaid
 flowchart TD
@@ -104,74 +176,72 @@ flowchart TD
     CK --> PASS
 ```
 
----
-
 ## What the demo shows
 
-| # | Client | Result | Why |
+| # | Visitor | Result | Why |
 |---|--------|--------|-----|
-| 1 | `GPTBot/1.2` | **DENIED** | matches `ai-block-aggressive.yaml` |
-| 2 | curl pretending to be Chrome | **CHALLENGED**, difficulty 2 | looks like a browser, so weight 10. No JS engine, so it stops |
-| 3 | same, on `/blame/` | **CHALLENGED**, difficulty 5 | +20 for the expensive path, so weight 30 |
-| 4 | CI runner, `Accept: application/json` | **PASSED** | explicit ALLOW, because CI cannot run JS |
-| 5 | `git/2.45.0` | **PASSED** | explicit ALLOW |
-| 6 | real browser | **PASSED** in about 4.5 s, then about 12 ms/page | solved the puzzle and got the cookie |
+| 1 | `GPTBot/1.2` | DENIED | it is in the `ai-block-aggressive.yaml` rule pack |
+| 2 | curl pretending to be Chrome | puzzle, difficulty 2 | looks like a browser, so 10 points. curl cannot run JavaScript, so it stops here |
+| 3 | the same, on `/blame/` | puzzle, difficulty 5 | +20 for the expensive page, so 30 points |
+| 4 | CI runner with `Accept: application/json` | PASSED | our ALLOW rule, because CI cannot run JavaScript |
+| 5 | `git/2.45.0` | PASSED | our ALLOW rule |
+| 6 | real browser | PASSED after about 4.5 s, then about 12 ms per page | it solved the puzzle and got the cookie |
 
-### Measured on a 2026 MacBook (about 130 kH/s)
+## Timings we measured
 
-`difficulty` counts leading zeros in hex, not in bits, so each +1 means 16 times more work:
+We measured these on a 2026 MacBook (about 130 kH/s). `difficulty` counts leading zeros
+in hex, not in bits, so each +1 means 16 times more work.
 
 | difficulty | expected hashes | time |
 |---|---|---|
 | 2 | 256 | instant |
 | 4 | 65,536 | about 0.5 s |
-| **5** | **1,048,576** | **about 4.5 s** (our expensive tier) |
-| 6 | 16,777,216 | over 2 min, measured and rejected as too slow |
+| 5 | 1,048,576 | about 4.5 s (we use this for the expensive pages) |
+| 6 | 16,777,216 | over 2 minutes, so we did not use it |
 
-Choosing this number is the main decision you have to make when deploying Anubis.
+Picking this number is the main decision you have to make when you set up Anubis.
 
----
+## Problems we ran into
 
-## Gotchas we hit
-
-- **`USE_REMOTE_ADDRESS: "true"` is required** when Anubis is exposed directly. It
-  normally sits behind Nginx or Caddy, which sets `X-Real-Ip`. Without it, every request
-  returns HTTP 500 with *administrator has misconfigured Anubis*.
-- **Challenges return HTTP 200, not 403.** This looks wrong, but aggressive scrapers
-  keep retrying after a 4xx and stop once they get a 200.
-- **Allow your own machine clients first.** Anything without a JavaScript engine, such
-  as CI, mobile apps, `git` and feed readers, breaks unless you add an explicit ALLOW
-  rule. This is the easiest way to take down your own service.
-- **`ED25519_PRIVATE_KEY_HEX` is a secret.** It signs the cookie. Ours is written into
-  the compose file for the demo. In production, generate one with `openssl rand -hex 32`.
-- The GeoIP and ASN rules in the upstream default policy need a paid
+- Every request gave HTTP 500 ("administrator has misconfigured Anubis") until we added
+  `USE_REMOTE_ADDRESS: "true"`. Anubis normally sits behind nginx or Caddy, which tell it
+  the visitor's IP in the `X-Real-Ip` header. We run it directly, so it has to read the IP
+  from the connection.
+- Anubis answers with HTTP 200, not 403, even when it blocks a bot or shows a puzzle. It
+  looks wrong, but aggressive scrapers keep retrying after a 4xx and stop after a 200.
+- Anything that cannot run JavaScript, like CI, mobile apps, `git` and feed readers, gets
+  stuck unless you add an ALLOW rule for it. That is the easiest way to break your own
+  service.
+- `ED25519_PRIVATE_KEY_HEX` signs the cookie, so it should be secret. Ours is written in
+  the compose file because this is a demo. For a real setup, make one with
+  `openssl rand -hex 32`.
+- The GeoIP and ASN rules in Anubis's default config need a paid
   [Thoth](https://anubis.techaro.lol/docs/admin/thoth) subscription, so we left them out.
 
 ## Limitations
 
-- **It slows scrapers down, it does not stop them.** A well funded scraper can run
-  headless Chrome and pay the cost. The goal is to make bulk scraping too expensive to
-  be worth doing.
-- **It needs JavaScript**, so text browsers and some accessibility tools cannot get through.
-- **Proof of work uses the visitor's CPU and battery.** This is a real cost, and it is
-  the main criticism the project gets.
-- **Choosing the difficulty is a guess.** Too low does nothing, too high pushes users
-  away. You can only find the right value by testing.
+- It slows scrapers down but does not stop them. A well funded scraper can run headless
+  Chrome and pay the cost. The point is to make bulk scraping too expensive to be worth it.
+- It needs JavaScript, so text browsers and some accessibility tools cannot get through.
+- The puzzle uses the visitor's CPU and battery. This is a real cost, and it is the main
+  criticism people have about the project.
+- Picking the difficulty is a guess. Too low does nothing, too high makes users leave.
+  You can only find a good value by testing.
 
 ## Files
 
 ```
-docker-compose.yml   # Anubis in front of nginx
-botPolicies.yaml     # the rules, and the file worth reading
-www/                 # the fake DevPortal site (home, /blame/, /commit/, /search/, /api/)
-demo/demo.sh         # scripted demo: runs five kinds of client against Anubis
-demo/watch-log.sh    # live, readable view of what Anubis decides (needs jq)
-demo/flood.sh        # sends many bots at once and counts what happened (./demo/flood.sh 1000 100)
+docker-compose.yml   # starts Anubis in front of nginx
+botPolicies.yaml     # the rules (the most important file)
+www/                 # the fake DevPortal website (home, /blame/, /commit/, /search/, /api/)
+demo/demo.sh         # the terminal demo with five kinds of visitors
+demo/watch-log.sh    # shows what Anubis decides, one line per visitor (needs jq)
+demo/flood.sh        # sends many bots at once and counts the results
 ```
 
 ## References
 
-- Anubis: <https://github.com/TecharoHQ/anubis> (MIT), by Xe Iaso at Techaro
-- Docs: <https://anubis.techaro.lol/docs/>
-- Used in production by GNOME, SourceHut, the Linux kernel mailing list archives,
-  FFmpeg and UNESCO.
+- Anubis: <https://github.com/TecharoHQ/anubis> (MIT license), by Xe Iaso at Techaro
+- Anubis docs: <https://anubis.techaro.lol/docs/>
+- It is used by GNOME, SourceHut, the Linux kernel mailing list archives, FFmpeg and
+  UNESCO.
