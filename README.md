@@ -30,23 +30,7 @@ Scraping still works, it just gets expensive.
 
 ---
 
-## Run it online (GitHub Codespaces)
-
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/u6610909/anubis-demo)
-
-1. Click the button above, then **Create codespace**. It installs Docker and starts the demo by itself. The first start takes a few minutes.
-2. Open the **Ports** tab at the bottom, right-click port **8888**, and choose **Port Visibility → Public**.
-3. Copy the link for port 8888 (it looks like `https://something-8888.app.github.dev`). Anyone can open it.
-
-To run the terminal demo against the online copy:
-
-```bash
-BASE=https://something-8888.app.github.dev ./demo/demo.sh
-```
-
-The codespace goes to sleep after about 30 minutes with no activity. Start it again from the same button and the link stays the same.
-
-## Quick start (on your own computer)
+## Quick start
 
 You need Docker Desktop running.
 
@@ -182,7 +166,6 @@ botPolicies.yaml     # the rules, and the file worth reading
 www/                 # the fake DevPortal site (home, /blame/, /commit/, /search/, /api/)
 demo/demo.sh         # scripted demo: runs five kinds of client against Anubis
 demo/watch-log.sh    # live, readable view of what Anubis decides (needs jq)
-.devcontainer/        # setup for running the demo in GitHub Codespaces
 ```
 
 ## References
