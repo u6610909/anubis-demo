@@ -18,15 +18,39 @@ jq -R -r --unbuffered '
   | select(.msg == "explicit deny" or .msg == "new challenge issued")
   | select((.path // "") | test("\\.map$") | not)          # skip DevTools debug files
   | (.user_agent // "") as $ua
-  | (["GPTBot","ClaudeBot","ChatGPT-User","PerplexityBot","Bytespider","CCBot",
-      "HeadlessChrome","Googlebot","bingbot","Firefox","Chrome","Safari","curl"]
-     | map(select(. as $n | $ua | test($n; "i"))) | first) // ($ua[0:24]) as $who
+  # Work out a short name for the visitor from its name tag (User-Agent).
+  # 1. known bots, most specific first
+  # 2. the word after "compatible;" (how many bots name themselves)
+  # 3. the browser name
+  # 4. the first word of the name tag, e.g. "curl" from "curl/8.7.1"
+  | ([["GPTBot","GPTBot"], ["ChatGPT-User","ChatGPT-User"], ["OAI-SearchBot","OAI-SearchBot"],
+      ["ClaudeBot","ClaudeBot"], ["Claude-User","Claude-User"], ["Claude-SearchBot","Claude-SearchBot"],
+      ["PerplexityBot","PerplexityBot"], ["Perplexity-User","Perplexity-User"],
+      ["Bytespider","Bytespider"], ["meta-externalagent","meta-externalagent"],
+      ["Amazonbot","Amazonbot"], ["CCBot","CCBot"], ["cohere-ai","cohere-ai"], ["Diffbot","Diffbot"],
+      ["Scrapy","Scrapy"], ["HeadlessChrome","HeadlessChrome"], ["Lightpanda","Lightpanda"],
+      ["Googlebot","Googlebot"], ["bingbot","bingbot"], ["DuckDuckBot","DuckDuckBot"],
+      ["Applebot","Applebot"], ["YandexBot","YandexBot"], ["Baiduspider","Baiduspider"],
+      ["AhrefsBot","AhrefsBot"], ["SemrushBot","SemrushBot"],
+      ["facebookexternalhit","facebookexternalhit"], ["Twitterbot","Twitterbot"],
+      ["Slackbot","Slackbot"], ["Discordbot","Discordbot"],
+      ["python-requests","python-requests"], ["Go-http-client","Go-http-client"],
+      ["node-fetch","node-fetch"], ["Wget","^Wget/"], ["curl","^curl/"], ["git","^git/"]]) as $known
+  | ( first($known[] | select(.[1] as $re | $ua | test($re; "i")) | .[0])
+      // ($ua | capture("compatible; ?(?<n>[^/;) ]+)")? | .n)
+      // (if   ($ua | test("Firefox/")) then "Firefox"
+          elif ($ua | test("Edg/"))     then "Edge"
+          elif ($ua | test("Chrome/"))  then "Chrome"
+          elif ($ua | test("Safari/"))  then "Safari"
+          else empty end)
+      // ($ua | capture("^(?<n>[^/ ]+)")? | .n)
+      // "(no name tag)" ) as $who
   | (.time[11:19]) as $t
   | if .msg == "explicit deny" then
-      "\($t)  BLOCKED   \(($who + "                ")[0:16]) \((.path + "          ")[0:10]) rule: \(.check_result.name)"
+      "\($t)  BLOCKED   \(($who + "                    ")[0:20]) \((.path + "          ")[0:10]) rule: \(.check_result.name)"
     else
       # points -> puzzle size, same numbers as the thresholds in botPolicies.yaml
       (if .weight >= 30 then "hard puzzle (difficulty 5)" else "easy puzzle (difficulty 2)" end) as $p
-      | "\($t)  PUZZLE    \(($who + "                ")[0:16]) \((.path + "          ")[0:10]) weight \(.weight), \($p)"
+      | "\($t)  PUZZLE    \(($who + "                    ")[0:20]) \((.path + "          ")[0:10]) weight \(.weight), \($p)"
     end
 '
