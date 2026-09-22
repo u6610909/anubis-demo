@@ -73,11 +73,11 @@ Open a second terminal in the same folder and run:
 Every time a bot is blocked or gets a puzzle, a line shows up, for example:
 
 ```
-07:46:53  BLOCKED   GPTBot           /          rule: bot/ai-crawlers-training
-07:46:53  PUZZLE    Chrome           /blame/    weight 30, hard puzzle (difficulty 5)
+07:46:53  BLOCKED   GPTBot               /          rule: bot/ai-crawlers-training
+07:46:53  PUZZLE    Chrome               /blame/    weight 35, hard puzzle (difficulty 5)
 ```
 
-Visitors that are just let in (git, our API, plain curl) do not show up here. Press
+Visitors that are just let in (git and our API) do not show up here. Press
 `Ctrl+C` to stop it.
 
 ### Step 6 (optional): Send a lot of bots at once
@@ -163,16 +163,19 @@ flowchart TD
     AL -->|"verified Googlebot<br/>/api/ + Accept: json<br/>git/*"| PASS["straight to origin"]
     AL -->|no| W["WEIGH: add up suspicion"]
 
-    W --> W1["browser-like UA<br/><b>+10</b>"]
+    W --> W0["every page<br/><b>+5</b>"]
+    W0 --> W1["browser-like UA<br/><b>+10</b>"]
     W1 --> W2["expensive path<br/>/blame/ /commit/ /search<br/><b>+20</b>"]
-    W2 --> T{"total weight"}
+    W2 --> W3["fake Googlebot<br/><b>+30</b>"]
+    W3 --> T{"total weight"}
 
-    T -->|"0"| PASS
     T -->|"1 to 29"| C1["difficulty 2<br/>about 256 hashes, instant"]
-    T -->|"30 or more"| C2["difficulty 5<br/>about 1,048,576 hashes, 4.5 s"]
+    T -->|"30 to 39"| C2["difficulty 5<br/>about 1,048,576 hashes, 4.5 s"]
+    T -->|"40 or more"| C3["difficulty 6<br/>about 16.7 million hashes, 2+ min"]
 
     C1 --> CK["solved, signed cookie issued<br/>rest of session about 12 ms/page"]
     C2 --> CK
+    C3 --> CK
     CK --> PASS
 ```
 
@@ -181,8 +184,8 @@ flowchart TD
 | # | Visitor | Result | Why |
 |---|--------|--------|-----|
 | 1 | `GPTBot/1.2` | DENIED | it is in the `ai-block-aggressive.yaml` rule pack |
-| 2 | curl pretending to be Chrome | puzzle, difficulty 2 | looks like a browser, so 10 points. curl cannot run JavaScript, so it stops here |
-| 3 | the same, on `/blame/` | puzzle, difficulty 5 | +20 for the expensive page, so 30 points |
+| 2 | curl pretending to be Chrome | puzzle, difficulty 2 | looks like a browser (10) + every page (5) = 15 points. curl cannot run JavaScript, so it stops here |
+| 3 | the same, on `/blame/` | puzzle, difficulty 5 | +20 for the expensive page, so 35 points |
 | 4 | CI runner with `Accept: application/json` | PASSED | our ALLOW rule, because CI cannot run JavaScript |
 | 5 | `git/2.45.0` | PASSED | our ALLOW rule |
 | 6 | real browser | PASSED after about 4.5 s, then about 12 ms per page | it solved the puzzle and got the cookie |
@@ -197,7 +200,7 @@ in hex, not in bits, so each +1 means 16 times more work.
 | 2 | 256 | instant |
 | 4 | 65,536 | about 0.5 s |
 | 5 | 1,048,576 | about 4.5 s (we use this for the expensive pages) |
-| 6 | 16,777,216 | over 2 minutes, so we did not use it |
+| 6 | 16,777,216 | over 2 minutes, so only fake Googlebot gets this |
 
 Picking this number is the main decision you have to make when you set up Anubis.
 

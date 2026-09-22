@@ -53,7 +53,7 @@ body=$(curl -s -A "$CHROME" "$BASE/blame/")
 diff2=$(grep -oE '"difficulty":[0-9]+' <<<"$body" | head -1 | cut -d: -f2)
 if grep -q 'not a bot' <<<"$body"; then
   printf '   %s  difficulty %s  %s\n' "${Y}CHALLENGED${N}" "${diff2:-?}" \
-         "${D}(browser +10, expensive path +20 = weight 30)${N}"
+         "${D}(browser 10 + every page 5 + expensive page 20 = 35 points)${N}"
 else
   printf '   unexpected: %s\n' "$(grep -oE '<title>[^<]*' <<<"$body")"
 fi

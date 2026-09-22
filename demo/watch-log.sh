@@ -50,7 +50,7 @@ jq -R -r --unbuffered '
       "\($t)  BLOCKED   \(($who + "                    ")[0:20]) \((.path + "          ")[0:10]) rule: \(.check_result.name)"
     else
       # points -> puzzle size, same numbers as the thresholds in botPolicies.yaml
-      (if .weight >= 30 then "hard puzzle (difficulty 5)" else "easy puzzle (difficulty 2)" end) as $p
+      (if .weight >= 40 then "hardest puzzle (difficulty 6)" elif .weight >= 30 then "hard puzzle (difficulty 5)" else "easy puzzle (difficulty 2)" end) as $p
       | "\($t)  PUZZLE    \(($who + "                    ")[0:20]) \((.path + "          ")[0:10]) weight \(.weight), \($p)"
     end
 '

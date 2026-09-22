@@ -72,18 +72,27 @@ bots:
   # 4. Fake Googlebot. The real Googlebot is already let in by the
   #    _allow-good rule pack above, after Anubis checks it really comes from
   #    Google. So any "Googlebot" that gets this far is lying about who it is.
-  #    Add 20 points so it gets the hard puzzle, even on the home page.
+  #    Add 30 points so it always reaches the hardest puzzle (level 6).
   - name: fake-googlebot
     action: WEIGH
     user_agent_regex: Googlebot
     weight:
-      adjust: 20
+      adjust: 30
 
-  # 5. A name tag with "Mozilla" or "Opera" in it looks like a browser, so it
-  #    gets 10 points. Almost every browser's name tag starts with
+  # 5. Every page gets 5 points. Every address starts with "/", so this
+  #    always matches. It means honest tools like curl, wget and CCBot also get
+  #    a puzzle instead of walking straight in. git and our CI runner are not
+  #    affected, because they were already let in by rules 1 and 2.
+  - name: every-page
+    action: WEIGH
+    expression: 'path.startsWith("/")'
+    weight:
+      adjust: 5
+
+  # 6. A name tag with "Mozilla" or "Opera" in it looks like a browser, so it
+  #    gets 10 more points. Almost every browser's name tag starts with
   #    "Mozilla/5.0", and so do the scrapers that pretend to be Chrome, which
-  #    is the problem we are solving. curl, wget and CCBot do not match, so
-  #    they stay at 0 points.
+  #    is the problem we are solving.
   - name: generic-browser
     action: WEIGH
     user_agent_regex: >-
@@ -95,12 +104,14 @@ bots:
 #  Thresholds: score -> result
 # ============================================================================
 thresholds:
-  # 0 points: let in with no puzzle. curl, wget and CCBot end up here.
+  # 0 points: let in with no puzzle. Because of the every-page rule, nobody
+  # reaches this rule any more. We keep it as a safety net.
   - name: minimal-suspicion
     expression: weight <= 0
     action: ALLOW
 
-  # 1 to 29 points (a browser on a normal page): easy puzzle.
+  # 1 to 29 points: easy puzzle. This is a browser on a normal page (15) or a
+  # tool like curl on any page (5 or 25).
   # "fast" = SHA-256 proof of work that uses all CPU cores.
   # difficulty N = the hash has to start with N zeros in hex, so it takes
   # about 16^N tries on average. Each +1 is 16 times more work, not 2 times.
@@ -115,21 +126,36 @@ thresholds:
       algorithm: fast
       difficulty: 2
 
-  # 30 points or more (browser 10 + expensive page 20): hard puzzle.
+  # 30 to 39 points: hard puzzle. This is a browser on an expensive page
+  # (browser 10 + every page 5 + expensive page 20 = 35).
   #   difficulty 5 = about 1,048,576 tries, 4 to 8 seconds on a laptop
   #   (we measured 4.5 s)
   # The visitor pays once, then the cookie covers the rest of the session.
   #
-  # We tried difficulty 6 first. That is 16 times more work again (about
-  # 16.7 million tries), and a real browser was still working after two
-  # minutes, so we went back to 5. Choosing this number is the main decision
-  # when you set up Anubis.
+  # We tried difficulty 6 here first, but a real browser needed over two
+  # minutes, which is too slow for real users. So normal browsers get 5, and
+  # 6 is only used for the most suspicious visitors below. Choosing these
+  # numbers is the main decision when you set up Anubis.
   - name: expensive-page-scraping
-    expression: weight >= 30
+    expression:
+      all:
+        - weight >= 30
+        - weight < 40
     action: CHALLENGE
     challenge:
       algorithm: fast
       difficulty: 5
+
+  # 40 points or more: hardest puzzle. Only a fake Googlebot gets this high
+  # (browser 10 + every page 5 + fake Googlebot 30 = 45 or more). A normal
+  # browser can get 35 at most.
+  #   difficulty 6 = about 16.7 million tries, over 2 minutes on our laptop
+  - name: most-suspicious
+    expression: weight >= 40
+    action: CHALLENGE
+    challenge:
+      algorithm: fast
+      difficulty: 6
 
 # Keep puzzle data in memory. If Anubis restarts, it forgets them, which is
 # fine for a demo. A real setup with several Anubis servers would use a
